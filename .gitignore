@@ -1,0 +1,48 @@
+# Environment
+setenv.sh
+.env
+
+# Temporary files
+tmp/
+logs/
+*.log
+
+# Build outputs
+dist/
+*.rbf
+*.sof
+*.pof
+
+# Quartus files
+db/
+incremental_db/
+output_files/
+*.qws
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.python-version
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ROMs (don't commit copyrighted material)
+*.gb
+*.gbc
+*.gba
+*.rom
+*.bin
+
+# Memory initialization files (may contain game data)
+# *.mif
+# *.hex
+
+# OS
+.DS_Store
+Thumbs.db
