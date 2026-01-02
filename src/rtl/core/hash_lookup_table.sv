@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 //------------------------------------------------------------------------------
 // hash_lookup_table.sv
 //
@@ -6,14 +7,16 @@
 // 2. Hash table (precise character matching)
 //
 // Bloom Filter:
-//   - 8KB (65536 bits)
+//   - Configurable size (default 8KB = 65536 bits)
 //   - 3 hash functions (variants of input hash)
 //   - ~2% false positive rate at 3000 entries
 //
 // Hash Table:
-//   - 4096 buckets (12-bit index)
+//   - Configurable buckets (default 4096)
 //   - 4-entry chaining per bucket
-//   - Entry format: {valid, hash[15:0], char_code[7:0], translation_ptr[15:0]}
+//   - Entry format: {valid[1], hash[16], char_code[8], translation_ptr[16]}
+//
+// Rewritten for Icarus Verilog compatibility.
 //------------------------------------------------------------------------------
 
 module hash_lookup_table #(
@@ -23,91 +26,93 @@ module hash_lookup_table #(
     parameter TABLE_ADDR_BITS = 12,
     parameter CHAIN_DEPTH = 4
 ) (
-    input  logic        clk,
-    input  logic        rst_n,
+    input  wire        clk,
+    input  wire        rst_n,
 
     // Hash input
-    input  logic        hash_valid,
-    input  logic [15:0] hash_in,
+    input  wire        hash_valid,
+    input  wire [15:0] hash_in,
 
     // Match output
-    output logic        match_found,
-    output logic        lookup_done,
-    output logic [7:0]  char_code,          // Matched character code
-    output logic [15:0] translation_ptr,    // Pointer to translation string
+    output wire        match_found,
+    output wire        lookup_done,
+    output wire [7:0]  char_code,
+    output wire [15:0] translation_ptr,
 
     // External memory interface (for large dictionaries)
-    output logic        ext_mem_rd,
-    output logic [23:0] ext_mem_addr,
-    input  logic [31:0] ext_mem_rdata,
-    input  logic        ext_mem_rvalid,
+    output wire        ext_mem_rd,
+    output wire [23:0] ext_mem_addr,
+    input  wire [31:0] ext_mem_rdata,
+    input  wire        ext_mem_rvalid,
 
     // Dictionary loading interface
-    input  logic        dict_load_en,
-    input  logic [15:0] dict_load_addr,
-    input  logic [39:0] dict_load_data,     // {valid, hash, char_code, translation_ptr}
-    input  logic        bloom_load_en,
-    input  logic [15:0] bloom_load_addr,
-    input  logic        bloom_load_bit
+    input  wire        dict_load_en,
+    input  wire [15:0] dict_load_addr,
+    input  wire [40:0] dict_load_data,
+    input  wire        bloom_load_en,
+    input  wire [15:0] bloom_load_addr,
+    input  wire        bloom_load_bit
 );
 
     //--------------------------------------------------------------------------
-    // Bloom filter memory (8KB = 65536 bits)
+    // Bloom filter memory
     //--------------------------------------------------------------------------
-
-    // Split into 4 BRAMs for parallel access (3 hash functions + 1 spare)
-    logic bloom_mem [0:BLOOM_SIZE_BITS-1];
+    reg bloom_mem [0:BLOOM_SIZE_BITS-1];
 
     // Three hash function variants for Bloom filter
-    wire [15:0] bloom_hash1 = hash_in;
-    wire [15:0] bloom_hash2 = {hash_in[7:0], hash_in[15:8]};  // Byte swap
-    wire [15:0] bloom_hash3 = hash_in ^ 16'h5A5A;             // XOR constant
+    wire [BLOOM_ADDR_BITS-1:0] bloom_hash1 = hash_in[BLOOM_ADDR_BITS-1:0];
+    wire [BLOOM_ADDR_BITS-1:0] bloom_hash2 = {hash_in[7:0], hash_in[15:8]};
+    wire [BLOOM_ADDR_BITS-1:0] bloom_hash3 = hash_in[BLOOM_ADDR_BITS-1:0] ^ 16'h5A5A;
 
-    logic bloom_bit1, bloom_bit2, bloom_bit3;
-    logic bloom_positive;
+    reg bloom_bit1, bloom_bit2, bloom_bit3;
+    wire bloom_positive;
 
     //--------------------------------------------------------------------------
-    // Hash table memory
-    // Each entry: {valid[1], hash[16], char_code[8], translation_ptr[16]} = 41 bits
-    // Stored as 48 bits for alignment
+    // Hash table memory - flattened structure
+    // Entry: valid[1] + hash[16] + char_code[8] + trans_ptr[16] = 41 bits
     //--------------------------------------------------------------------------
+    localparam TABLE_SIZE = TABLE_BUCKETS * CHAIN_DEPTH;
+    localparam ENTRY_WIDTH = 41;
 
-    // Table entry structure
-    typedef struct packed {
-        logic        valid;
-        logic [15:0] stored_hash;
-        logic [7:0]  char_code;
-        logic [15:0] trans_ptr;
-    } table_entry_t;
+    reg [ENTRY_WIDTH-1:0] hash_table [0:TABLE_SIZE-1];
 
-    // Hash table with chaining (4 entries per bucket)
-    table_entry_t hash_table [0:TABLE_BUCKETS*CHAIN_DEPTH-1];
+    // Entry field positions
+    localparam VALID_BIT = 40;
+    localparam HASH_HI = 39;
+    localparam HASH_LO = 24;
+    localparam CHAR_HI = 23;
+    localparam CHAR_LO = 16;
+    localparam PTR_HI = 15;
+    localparam PTR_LO = 0;
 
     //--------------------------------------------------------------------------
     // State machine
     //--------------------------------------------------------------------------
+    localparam [2:0] IDLE        = 3'd0;
+    localparam [2:0] BLOOM_CHECK = 3'd1;
+    localparam [2:0] TABLE_LOOKUP= 3'd2;
+    localparam [2:0] CHAIN_SEARCH= 3'd3;
+    localparam [2:0] DONE        = 3'd4;
 
-    typedef enum logic [2:0] {
-        IDLE,
-        BLOOM_CHECK,
-        TABLE_LOOKUP,
-        CHAIN_SEARCH,
-        DONE
-    } state_t;
+    reg [2:0] state, next_state;
 
-    state_t state, next_state;
+    reg [15:0] current_hash;
+    reg [TABLE_ADDR_BITS-1:0] table_bucket;
+    reg [1:0]  chain_index;
 
-    logic [15:0] current_hash;
-    logic [11:0] table_bucket;
-    logic [1:0]  chain_index;
-    table_entry_t current_entry;
+    // Current entry being examined
+    reg [ENTRY_WIDTH-1:0] current_entry;
+    wire current_valid      = current_entry[VALID_BIT];
+    wire [15:0] current_stored_hash = current_entry[HASH_HI:HASH_LO];
+    wire [7:0]  current_char_code   = current_entry[CHAR_HI:CHAR_LO];
+    wire [15:0] current_trans_ptr   = current_entry[PTR_HI:PTR_LO];
 
     //--------------------------------------------------------------------------
     // Bloom filter logic
     //--------------------------------------------------------------------------
 
     // Bloom filter reads (registered for timing)
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         bloom_bit1 <= bloom_mem[bloom_hash1];
         bloom_bit2 <= bloom_mem[bloom_hash2];
         bloom_bit3 <= bloom_mem[bloom_hash3];
@@ -117,27 +122,25 @@ module hash_lookup_table #(
     assign bloom_positive = bloom_bit1 && bloom_bit2 && bloom_bit3;
 
     // Bloom filter write (for loading)
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         if (bloom_load_en) begin
-            bloom_mem[bloom_load_addr] <= bloom_load_bit;
+            bloom_mem[bloom_load_addr[BLOOM_ADDR_BITS-1:0]] <= bloom_load_bit;
         end
     end
 
     //--------------------------------------------------------------------------
     // Hash table bucket calculation
     //--------------------------------------------------------------------------
-
-    // Use lower 12 bits of hash for bucket index
-    wire [11:0] hash_bucket = hash_in[11:0];
+    wire [TABLE_ADDR_BITS-1:0] hash_bucket = hash_in[TABLE_ADDR_BITS-1:0];
 
     //--------------------------------------------------------------------------
-    // State machine
+    // State machine - sequential logic
     //--------------------------------------------------------------------------
-
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= IDLE;
             current_hash <= 16'h0;
+            table_bucket <= 0;
             chain_index <= 2'b0;
         end else begin
             state <= next_state;
@@ -160,7 +163,10 @@ module hash_lookup_table #(
         end
     end
 
-    always_comb begin
+    //--------------------------------------------------------------------------
+    // State machine - combinational logic
+    //--------------------------------------------------------------------------
+    always @(*) begin
         next_state = state;
 
         case (state)
@@ -172,7 +178,10 @@ module hash_lookup_table #(
 
             BLOOM_CHECK: begin
                 // Wait one cycle for bloom filter read
-                next_state = bloom_positive ? TABLE_LOOKUP : DONE;
+                if (bloom_positive)
+                    next_state = TABLE_LOOKUP;
+                else
+                    next_state = DONE;
             end
 
             TABLE_LOOKUP: begin
@@ -180,11 +189,10 @@ module hash_lookup_table #(
             end
 
             CHAIN_SEARCH: begin
-                // Read table entry
-                if (current_entry.valid && current_entry.stored_hash == current_hash) begin
+                if (current_valid && current_stored_hash == current_hash) begin
                     // Match found
                     next_state = DONE;
-                end else if (chain_index == CHAIN_DEPTH - 1 || !current_entry.valid) begin
+                end else if (chain_index == CHAIN_DEPTH - 1 || !current_valid) begin
                     // End of chain or invalid entry
                     next_state = DONE;
                 end
@@ -202,47 +210,39 @@ module hash_lookup_table #(
     //--------------------------------------------------------------------------
     // Hash table read
     //--------------------------------------------------------------------------
-
     wire [13:0] table_addr = {table_bucket, chain_index};
 
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         current_entry <= hash_table[table_addr];
     end
 
     //--------------------------------------------------------------------------
     // Hash table write (for loading)
     //--------------------------------------------------------------------------
-
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         if (dict_load_en) begin
-            hash_table[dict_load_addr[13:0]] <= '{
-                valid:       dict_load_data[39],
-                stored_hash: dict_load_data[38:23],
-                char_code:   dict_load_data[22:15],
-                trans_ptr:   dict_load_data[14:0]
-            };
+            hash_table[dict_load_addr[13:0]] <= dict_load_data[ENTRY_WIDTH-1:0];
         end
     end
 
     //--------------------------------------------------------------------------
     // Output logic
     //--------------------------------------------------------------------------
+    reg match_found_reg;
+    reg [7:0] char_code_reg;
+    reg [15:0] trans_ptr_reg;
 
-    logic match_found_reg;
-    logic [7:0] char_code_reg;
-    logic [15:0] trans_ptr_reg;
-
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             match_found_reg <= 1'b0;
             char_code_reg <= 8'h0;
             trans_ptr_reg <= 16'h0;
         end else if (state == CHAIN_SEARCH &&
-                     current_entry.valid &&
-                     current_entry.stored_hash == current_hash) begin
+                     current_valid &&
+                     current_stored_hash == current_hash) begin
             match_found_reg <= 1'b1;
-            char_code_reg <= current_entry.char_code;
-            trans_ptr_reg <= current_entry.trans_ptr;
+            char_code_reg <= current_char_code;
+            trans_ptr_reg <= current_trans_ptr;
         end else if (state == IDLE) begin
             match_found_reg <= 1'b0;
         end

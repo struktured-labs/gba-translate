@@ -105,8 +105,8 @@ test-snooper: $(BUILD_DIR)/tb_vram_snooper
 # Hash Lookup Table Tests
 #------------------------------------------------------------------------------
 
-$(BUILD_DIR)/tb_hash_lookup_table: $(TB_LOOKUP) $(CORE_DIR)/hash_lookup_table.sv | $(BUILD_DIR)
-	$(IVERILOG) $(IVFLAGS) -o $@ $(CORE_DIR)/hash_lookup_table.sv $(TB_LOOKUP)
+$(BUILD_DIR)/tb_hash_lookup_table: $(TB_DIR)/tb_hash_lookup_table.sv $(CORE_DIR)/hash_lookup_table.sv | $(BUILD_DIR)
+	$(IVERILOG) $(IVFLAGS) -o $@ $(CORE_DIR)/hash_lookup_table.sv $(TB_DIR)/tb_hash_lookup_table.sv
 
 .PHONY: test-lookup
 test-lookup: $(BUILD_DIR)/tb_hash_lookup_table
@@ -116,11 +116,25 @@ test-lookup: $(BUILD_DIR)/tb_hash_lookup_table
 	$(VVP) $(BUILD_DIR)/tb_hash_lookup_table
 
 #------------------------------------------------------------------------------
+# Integration Tests
+#------------------------------------------------------------------------------
+
+$(BUILD_DIR)/tb_integration: $(TB_DIR)/tb_integration.sv $(CORE_DIR)/vram_snooper.sv $(CORE_DIR)/tile_hash_generator.sv $(CORE_DIR)/hash_lookup_table.sv | $(BUILD_DIR)
+	$(IVERILOG) $(IVFLAGS) -o $@ $(CORE_DIR)/vram_snooper.sv $(CORE_DIR)/tile_hash_generator.sv $(CORE_DIR)/hash_lookup_table.sv $(TB_DIR)/tb_integration.sv
+
+.PHONY: test-integration
+test-integration: $(BUILD_DIR)/tb_integration
+	@echo "========================================="
+	@echo "Running Integration Test"
+	@echo "========================================="
+	$(VVP) $(BUILD_DIR)/tb_integration
+
+#------------------------------------------------------------------------------
 # Run All Tests
 #------------------------------------------------------------------------------
 
 .PHONY: test
-test: test-hash test-snooper
+test: test-hash test-snooper test-lookup test-integration
 	@echo ""
 	@echo "========================================="
 	@echo "All tests completed"
@@ -169,11 +183,12 @@ help:
 	@echo "GB/GBA Translation FPGA Core - Build Targets"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test          - Run all testbenches"
-	@echo "  make test-hash     - Run tile hash generator test"
-	@echo "  make test-hash-vcd - Run with VCD waveform output"
-	@echo "  make test-snooper  - Run VRAM snooper test"
-	@echo "  make test-lookup   - Run hash lookup table test"
+	@echo "  make test            - Run all testbenches"
+	@echo "  make test-hash       - Run tile hash generator test"
+	@echo "  make test-hash-vcd   - Run with VCD waveform output"
+	@echo "  make test-snooper    - Run VRAM snooper test"
+	@echo "  make test-lookup     - Run hash lookup table test"
+	@echo "  make test-integration- Run end-to-end integration test"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint          - Run Verilator lint on all sources"
