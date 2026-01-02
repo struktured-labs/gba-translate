@@ -11,7 +11,10 @@ This FPGA core intercepts VRAM writes to detect Japanese text tiles and provides
 
 ## Project Status
 
-🚧 **Early Development** - Core architecture and RTL modules implemented, not yet synthesized.
+🚧 **Early Development** - Core architecture and RTL modules implemented, simulation tests passing, not yet synthesized.
+
+[![Tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v0.3.0-blue)]()
 
 ## Architecture
 
@@ -58,17 +61,45 @@ gba-translate/
 
 ```bash
 # Clone repository
-git clone https://github.com/youruser/gba-translate.git
+git clone https://github.com/struktured-labs/gba-translate.git
 cd gba-translate
 
 # Install Python dependencies
 uv sync
 
-# Extract tiles from a ROM (example)
-uv run python src/tools/tile_extractor.py game.gb \
-    --tile-start 0x8000 --tile-count 96 \
-    --game-name pokemon_green
+# Run tests (requires iverilog)
+make test
 ```
+
+## Testing
+
+Requires [Icarus Verilog](http://iverilog.icarus.com/) and optionally [Verilator](https://verilator.org/) for linting.
+
+```bash
+# Install simulators (Ubuntu/Debian)
+sudo apt install iverilog verilator
+
+# Run all tests (29 tests)
+make test
+
+# Individual test suites
+make test-hash        # Tile hash generator (8 tests)
+make test-snooper     # VRAM snooper (4 tests)
+make test-lookup      # Hash lookup table (12 tests)
+make test-integration # End-to-end pipeline (5 tests)
+
+# Lint check
+make lint
+```
+
+### Test Coverage
+
+| Module | Tests | Description |
+|--------|-------|-------------|
+| tile_hash_generator | 8 | CRC-16-CCITT computation |
+| vram_snooper | 4 | VRAM write capture & streaming |
+| hash_lookup_table | 12 | Bloom filter + hash table lookup |
+| integration | 5 | End-to-end pipeline verification |
 
 ## Target Games
 
