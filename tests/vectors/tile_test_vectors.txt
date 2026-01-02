@@ -1,0 +1,35 @@
+# Tile Hash Test Vectors
+# Format: name, hex_data, expected_hash
+
+all_zeros:
+  data: 00000000000000000000000000000000
+  hash: 0x6A0A (27146)
+
+all_ones:
+  data: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  hash: 0x6A4B (27211)
+
+sequential:
+  data: 000102030405060708090A0B0C0D0E0F
+  hash: 0x3B37 (15159)
+
+alternating:
+  data: AA55AA55AA55AA55AA55AA55AA55AA55
+  hash: 0x96A6 (38566)
+
+filled_square:
+  data: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  hash: 0x6A4B (27211)
+
+letter_a:
+  data: 18003C00660066007E00660066000000
+  hash: 0x17AA (6058)
+
+pseudo_random:
+  data: AD23A8D85C9A4E06559EF6972AEFD571
+  hash: 0xA49B (42139)
+
+single_bit:
+  data: 80000000000000000000000000000000
+  hash: 0x627B (25211)
+

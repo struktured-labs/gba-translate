@@ -104,6 +104,7 @@ endmodule
 // (Computes CRC of 8 bytes in a single cycle - useful for parallel processing)
 //------------------------------------------------------------------------------
 
+/* verilator lint_off DECLFILENAME */
 module tile_hash_generator_fast (
     input  logic        clk,
     input  logic        rst_n,

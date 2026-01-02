@@ -1,0 +1,9 @@
+// Expected CRC-16 hashes
+6A0A  // all_zeros
+6A4B  // all_ones
+3B37  // sequential
+96A6  // alternating
+6A4B  // filled_square
+17AA  // letter_a
+A49B  // pseudo_random
+627B  // single_bit

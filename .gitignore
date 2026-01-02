@@ -8,10 +8,12 @@ logs/
 *.log
 
 # Build outputs
+build/
 dist/
 *.rbf
 *.sof
 *.pof
+*.vcd
 
 # Quartus files
 db/

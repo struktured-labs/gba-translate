@@ -52,7 +52,6 @@ module vram_snooper #(
     logic [7:0] tile_buffer [0:TILE_SIZE_BYTES-1];
 
     // Current tile tracking
-    logic [8:0]  current_tile;          // Tile index being written
     logic [8:0]  capturing_tile;        // Tile we're capturing
     logic [3:0]  bytes_captured;        // Bytes received for current tile
     logic [15:0] tile_write_mask;       // Which bytes have been written
@@ -76,8 +75,10 @@ module vram_snooper #(
     //--------------------------------------------------------------------------
 
     // Check if address is in tile data region
-    wire in_tile_region = (vram_addr >= VRAM_TILE_START) &&
-                          (vram_addr <= VRAM_TILE_END);
+    // verilator lint_off UNSIGNED
+    wire in_tile_region = (vram_addr >= VRAM_TILE_START[12:0]) &&
+                          (vram_addr <= VRAM_TILE_END[12:0]);
+    // verilator lint_on UNSIGNED
 
     // Calculate tile index from address (16 bytes per tile)
     wire [8:0] addr_tile_index = vram_addr[12:4];  // Divide by 16
@@ -156,7 +157,7 @@ module vram_snooper #(
             end
 
             STREAMING: begin
-                if (stream_index == TILE_SIZE_BYTES - 1) begin
+                if (stream_index == 4'(TILE_SIZE_BYTES - 1)) begin
                     next_state = DONE;
                 end
             end
@@ -190,7 +191,7 @@ module vram_snooper #(
     // Hash data streaming
     assign hash_data_valid = (state == STREAMING);
     assign hash_data = tile_buffer[stream_index];
-    assign hash_data_last = (state == STREAMING) && (stream_index == TILE_SIZE_BYTES - 1);
+    assign hash_data_last = (state == STREAMING) && (stream_index == 4'(TILE_SIZE_BYTES - 1));
 
     // Capture status
     assign tile_capture_done = (state == DONE);
