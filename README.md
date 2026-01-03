@@ -1,6 +1,10 @@
 # GB/GBA Translation FPGA Core
 
-Real-time Japanese text translation overlay for Game Boy and Game Boy Advance games, targeting the Analogue Pocket (openFPGA).
+Real-time Japanese text translation overlay for Game Boy and Game Boy Advance games.
+
+**Supported Platforms:**
+- **Analogue Pocket** (openFPGA) - Play real Japanese cartridges with live translation
+- **MiSTer FPGA** - ROM-based, easier development and debugging
 
 ## Overview
 
@@ -39,9 +43,12 @@ This FPGA core intercepts VRAM writes to detect Japanese text tiles and provides
 gba-translate/
 ├── src/
 │   ├── rtl/
-│   │   ├── core/           # Main translation logic
+│   │   ├── core/           # Shared translation logic (platform-agnostic)
 │   │   ├── memory/         # Font ROM, dictionaries
-│   │   └── gb_core/        # Modified GB core (future)
+│   │   ├── platform/
+│   │   │   ├── analogue/   # Analogue Pocket wrapper
+│   │   │   └── mister/     # MiSTer wrapper
+│   │   └── tb/             # Testbenches
 │   └── tools/              # Python utilities
 ├── data/
 │   ├── fonts/              # ASCII bitmap fonts

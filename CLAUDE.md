@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-FPGA core for real-time Japanese text translation on Game Boy/GBA games, targeting Analogue Pocket (openFPGA, Cyclone V).
+FPGA core for real-time Japanese text translation on Game Boy/GBA games. Multi-platform support:
+- **Analogue Pocket** (openFPGA) - Play real Japanese cartridges with translation
+- **MiSTer FPGA** - ROM-based with easier development/debugging
 
 ## Architecture
 
@@ -34,6 +36,18 @@ make vectors
 make clean
 ```
 
+## Directory Structure
+
+```
+src/rtl/
+├── core/              # Shared translation logic (platform-agnostic)
+├── memory/            # Font ROM, shared memory modules
+├── platform/
+│   ├── analogue/      # Analogue Pocket wrapper (stub)
+│   └── mister/        # MiSTer wrapper (stub)
+└── tb/                # Testbenches
+```
+
 ## Key Files
 
 | File | Purpose |
@@ -44,6 +58,8 @@ make clean
 | `src/rtl/core/caption_renderer.sv` | Text overlay rendering |
 | `src/rtl/core/replace_mode_ctrl.sv` | Tile substitution logic |
 | `src/rtl/core/translation_overlay_top.sv` | Top-level integration |
+| `src/rtl/platform/analogue/pocket_top.sv` | Analogue Pocket wrapper (stub) |
+| `src/rtl/platform/mister/mister_top.sv` | MiSTer wrapper (stub) |
 | `src/tools/test_vectors.py` | Python CRC-16 reference for test generation |
 
 ## RTL Conventions
